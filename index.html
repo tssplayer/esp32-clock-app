@@ -172,43 +172,43 @@
     let rxCharacteristic = null;
     let txCharacteristic = null;
 
-    async function connectBLE() {
-      try {
-        log("Requesting Bluetooth Device...");
-        bleDevice = await navigator.bluetooth.requestDevice({
-          filters: [{ name: 'ESP32-Alarm-Clock' }],
-          optionalServices: [SERVICE_UUID]
-        });
-
-        bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
-
-        log("Connecting to GATT Server...");
-        const server = await bleDevice.gatt.connect();
-
-        log("Getting Service...");
-        const service = await server.getPrimaryService(SERVICE_UUID);
-
-        log("Getting Characteristics...");
-        rxCharacteristic = await service.getCharacteristic(CHARACTERISTIC_RX);
-        txCharacteristic = await service.getCharacteristic(CHARACTERISTIC_TX);
-
-        // Start Notifications
-        await txCharacteristic.startNotifications();
-        txCharacteristic.addEventListener('characteristicvaluechanged', handleNotifications);
-
-        document.getElementById('status').innerText = "Status: Connected to " + bleDevice.name;
-        document.getElementById('connectBtn').innerText = "Disconnect";
-        document.getElementById('connectBtn').onclick = disconnectBLE;
-
-        log("Connected successfully!");
-        
-        // Fetch current alarm state
-        getAlarms();
-
-      } catch (error) {
-        log("Error: " + error);
+      async function connectBLE() {
+        try {
+          log("Requesting Bluetooth Device...");
+          bleDevice = await navigator.bluetooth.requestDevice({
+            filters: [{ name: 'ESP32-Alarm-Clock' }],
+            optionalServices: [SERVICE_UUID]
+          });
+  
+          bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+  
+          log("Connecting to GATT Server...");
+          const server = await bleDevice.gatt.connect();
+  
+          log("Getting Service...");
+          const service = await server.getPrimaryService(SERVICE_UUID);
+  
+          log("Getting Characteristics...");
+          rxCharacteristic = await service.getCharacteristic(CHARACTERISTIC_RX);
+          txCharacteristic = await service.getCharacteristic(CHARACTERISTIC_TX);
+  
+          // Start Notifications
+          await txCharacteristic.startNotifications();
+          txCharacteristic.addEventListener('characteristicvaluechanged', handleNotifications);
+  
+          document.getElementById('status').innerText = "Status: Connected to " + bleDevice.name;
+          document.getElementById('connectBtn').innerText = "Disconnect";
+          document.getElementById('connectBtn').onclick = disconnectBLE;
+  
+          log("Connected successfully!");
+          
+          // Fetch current alarm state
+          getAlarms();
+  
+        } catch (error) {
+          log("Error: " + error);
+        }
       }
-    }
 
     function disconnectBLE() {
       if (bleDevice && bleDevice.gatt.connected) {
