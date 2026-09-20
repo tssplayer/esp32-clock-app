@@ -181,19 +181,67 @@
       color: white;
     }
 
-    .input-group {
+    /* Add Plus Button */
+    .btn-add-plus {
+      background: rgba(56, 189, 248, 0.1);
+      color: var(--accent-color);
+      border: 2px dashed var(--accent-color);
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 1.1rem;
+      font-weight: bold;
+      width: 100%;
+      cursor: pointer;
+      margin-top: 12px;
       display: flex;
-      gap: 10px;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background 0.2s;
+    }
+
+    .btn-add-plus:hover {
+      background: rgba(56, 189, 248, 0.2);
+    }
+
+    /* Modal Popup Styling */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 1000;
+    }
+
+    .modal-card {
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 20px;
+      max-width: 320px;
+      width: 100%;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      border: 1px solid #334155;
     }
 
     input[type="time"] {
       background: #0f172a;
       border: 1px solid #334155;
       color: white;
-      padding: 10px;
+      padding: 12px;
       border-radius: 8px;
-      font-size: 1rem;
-      flex-grow: 1;
+      font-size: 1.2rem;
+      width: 100%;
+      box-sizing: border-box;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
     }
 
     #status {
@@ -227,33 +275,39 @@
       <div id="status">Status: Disconnected</div>
     </div>
 
-    <!-- Active Alarms List -->
+    <!-- Active Alarms List Card -->
     <div class="card">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
         <h3 style="margin: 0;">Active Alarms</h3>
         <button class="btn btn-small" style="background: #334155; color: white;" onclick="getAlarms()">Refresh</button>
       </div>
+      
       <div id="alarmList">
         <p style="color: #64748b; text-align: center;">Connect via BLE to load alarms.</p>
       </div>
-    </div>
 
-    <!-- Add New Alarm Card (Positioned at Bottom) -->
-    <div id="addAlarmCard" class="card">
-      <h3>Set New Alarm</h3>
-      <div class="input-group">
-        <input type="time" id="newAlarmTime" value="07:00">
-        <button id="addAlarmBtn" class="btn btn-small" onclick="addNewAlarm()">Add Alarm</button>
-      </div>
-      <p id="maxAlarmsNotice" style="color: var(--danger-color); font-size: 0.85rem; display: none; margin-top: 8px; text-align: center;">
-        Maximum limit reached (5/5 active alarms).
-      </p>
+      <!-- Add Alarm '+' Button (Shown if available slot exists) -->
+      <button id="addAlarmPlusBtn" class="btn-add-plus" onclick="openAddModal()" style="display: none;">
+        <span>+</span> Add Alarm
+      </button>
     </div>
 
     <!-- Debug Log -->
     <div class="card">
       <h3>BLE Log</h3>
       <div id="responseLog">Awaiting connection...</div>
+    </div>
+  </div>
+
+  <!-- Add Alarm Modal Popup -->
+  <div id="addModal" class="modal-overlay">
+    <div class="modal-card">
+      <h3 style="text-align: center; margin-bottom: 16px;">Set New Alarm Time</h3>
+      <input type="time" id="newAlarmTime" value="07:00">
+      <div class="modal-actions">
+        <button class="btn" style="background: #475569; color: white;" onclick="closeAddModal()">Cancel</button>
+        <button class="btn" onclick="confirmAddAlarm()">Save Alarm</button>
+      </div>
     </div>
   </div>
 
@@ -314,6 +368,7 @@
       document.getElementById('status').innerText = "Status: Disconnected";
       document.getElementById('connectBtn').innerText = "Connect to ESP32 Clock";
       document.getElementById('connectBtn').onclick = connectBLE;
+      document.getElementById('addAlarmPlusBtn').style.display = 'none';
       log("Disconnected from device.");
     }
 
@@ -404,23 +459,32 @@
         alarmListDiv.innerHTML = `<p style="color: #64748b; text-align: center;">No active alarms set.</p>`;
       }
 
-      updateAddButtonState();
+      updatePlusButtonVisibility();
     }
 
-    function updateAddButtonState() {
-      const addBtn = document.getElementById('addAlarmBtn');
-      const maxNotice = document.getElementById('maxAlarmsNotice');
-
-      if (activeAlarmsCount >= MAX_SLOTS) {
-        addBtn.disabled = true;
-        addBtn.style.opacity = "0.5";
-        addBtn.style.cursor = "not-allowed";
-        maxNotice.style.display = "block";
+    function updatePlusButtonVisibility() {
+      const plusBtn = document.getElementById('addAlarmPlusBtn');
+      // Show '+' button only if connected and active slot limit not reached
+      if (bleDevice && bleDevice.gatt.connected && activeAlarmsCount < MAX_SLOTS) {
+        plusBtn.style.display = "flex";
       } else {
-        addBtn.disabled = false;
-        addBtn.style.opacity = "1";
-        addBtn.style.cursor = "pointer";
-        maxNotice.style.display = "none";
+        plusBtn.style.display = "none";
+      }
+    }
+
+    function openAddModal() {
+      document.getElementById('addModal').style.display = 'flex';
+    }
+
+    function closeAddModal() {
+      document.getElementById('addModal').style.display = 'none';
+    }
+
+    function confirmAddAlarm() {
+      const timeVal = document.getElementById('newAlarmTime').value;
+      if (timeVal) {
+        sendBLECommand(`ADD:${timeVal}`);
+        closeAddModal();
       }
     }
 
@@ -432,18 +496,11 @@
     function editAlarmTime(slotId, currentTime) {
       const newTime = prompt(`Edit time for Slot #${slotId}:`, currentTime);
       if (newTime && newTime !== currentTime) {
-        if (/^\d{2}:\d{2}$/.test(newTime)) {
+        if (/^\d{1,2}:\d{2}$/.test(newTime)) {
           sendBLECommand(`SET:${slotId},${newTime}`);
         } else {
           alert("Invalid time format. Please use HH:MM format (e.g., 07:30).");
         }
-      }
-    }
-
-    function addNewAlarm() {
-      const timeVal = document.getElementById('newAlarmTime').value;
-      if (timeVal) {
-        sendBLECommand(`ADD:${timeVal}`);
       }
     }
 
@@ -466,18 +523,6 @@
         await rxCharacteristic.writeValue(encoder.encode(commandStr + "\n"));
       } catch (error) {
         log("Send error: " + error);
-      }
-    }
-
-    function editAlarmTime(slotId, currentTime) {
-      const newTime = prompt(`Edit time for Slot #${slotId}:`, currentTime);
-      if (newTime && newTime !== currentTime) {
-        // Matches HH:MM or H:MM
-        if (/^\d{1,2}:\d{2}$/.test(newTime)) {
-          sendBLECommand(`SET:${slotId},${newTime}`);
-        } else {
-          alert("Invalid time format. Please use HH:MM format (e.g., 07:30).");
-        }
       }
     }
 
