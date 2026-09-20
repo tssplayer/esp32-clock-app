@@ -266,19 +266,11 @@
       const alarmListDiv = document.getElementById('alarmList');
       alarmListDiv.innerHTML = '';
     
-      // Extract everything after 'TIME=' or split by '|'
-      // Example expected formats:
-      // "TIME=14:30 | [0]07:30(ON) [1]08:00(OFF)"
-      // "TIME=14:30:00 | [0] 07:30 (ON)"
-      
       const parts = dataString.split('|');
       const alarmsText = parts.length > 1 ? parts[1] : dataString;
     
-      // Flexible regex matching:
-      // Group 1: Slot ID (\d+)
-      // Group 2: Time (\d{1,2}:\d{2}(?::\d{2})?) -> handles HH:MM or HH:MM:SS
-      // Group 3: Status (ON|OFF)
-      const alarmRegex = /\[(\d+)\]\s*(\d{1,2}:\d{2}(?::\d{2})?)\s*\((ON\vert{}OFF)\)/gi;
+      // Updated Regex: \d{1,2}:\d{1,2} matches 0:00, 7:30, 21:20, 07:05, etc.
+      const alarmRegex = /\[(\d+)\]\s*(\d{1,2}:\d{1,2}(?::\d{1,2})?)\s*\((ON\vert{}OFF)\)/gi;
     
       let match;
       let foundAlarms = 0;
@@ -286,8 +278,16 @@
       while ((match = alarmRegex.exec(alarmsText)) !== null) {
         foundAlarms++;
         const id = match[1];
-        const time = match[2];
+        let time = match[2];
         const isOn = match[3].toUpperCase() === 'ON';
+    
+        // Format time to padded HH:MM format for clean UI (e.g., 0:00 -> 00:00)
+        const timeParts = time.split(':');
+        if (timeParts.length >= 2) {
+          const hours = timeParts[0].padStart(2, '0');
+          const minutes = timeParts[1].padStart(2, '0');
+          time = `${hours}:${minutes}`;
+        }
     
         const alarmElement = document.createElement('div');
         alarmElement.className = 'alarm-item';
