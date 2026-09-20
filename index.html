@@ -171,6 +171,7 @@
     let bleDevice = null;
     let rxCharacteristic = null;
     let txCharacteristic = null;
+    let bleRxBuffer = "";
 
     async function connectBLE() {
       try {
@@ -238,49 +239,77 @@
     }
 
     function handleNotifications(event) {
-      const value = new TextDecoder().decode(event.target.value);
-      log("Received: " + value);
+      const chunk = new TextDecoder().decode(event.target.value);
+      log("Received Chunk: " + chunk);
+    
+      // Append incoming chunk to buffer
+      bleRxBuffer += chunk;
+    
+      // Check if buffer contains a newline '\n' indicating end of message
+      // Or check if it contains 'TIME=' to start parsing
+      if (bleRxBuffer.includes('\n') || bleRxBuffer.includes('\r')) {
+        processCompleteMessage(bleRxBuffer.trim());
+        bleRxBuffer = ""; // Clear buffer for next message
+      }
+    }
 
-      // Parse list formatting output if response contains TIME=
-      if (value.startsWith("TIME=")) {
-        parseAndRenderList(value);
+    function processCompleteMessage(fullDataString) {
+      log("Processing Full Msg: " + fullDataString);
+    
+      // If response contains alarm list info
+      if (fullDataString.includes("TIME=")) {
+        parseAndRenderList(fullDataString);
       }
     }
 
     function parseAndRenderList(dataString) {
       const alarmListDiv = document.getElementById('alarmList');
       alarmListDiv.innerHTML = '';
-
-      // Format string example: TIME=14:30 | [0]7:30(ON) [1]8:00(OFF)
+    
+      // Extract everything after 'TIME=' or split by '|'
+      // Example expected formats:
+      // "TIME=14:30 | [0]07:30(ON) [1]08:00(OFF)"
+      // "TIME=14:30:00 | [0] 07:30 (ON)"
+      
       const parts = dataString.split('|');
-      const alarmsRaw = parts[1].trim().split(' ');
-
-      alarmsRaw.forEach((item, index) => {
-        // Matches format [ID]HH:MM(STATUS)
-        const match = item.match(/\[(\d+)\](\d+:\d+)\((ON\vert{}OFF)\)/);
-        if (match) {
-          const id = match[1];
-          const time = match[2];
-          const isOn = match[3] === 'ON';
-
-          const alarmElement = document.createElement('div');
-          alarmElement.className = 'alarm-item';
-          alarmElement.innerHTML = `
-            <div>
-              <span class="alarm-time">${time}</span>
-              <span style="font-size: 0.8rem; color: #94a3b8; margin-left: 8px;">Slot #${id}</span>
-            </div>
-            <div>
-              <button class="btn btn-small ${isOn ? 'btn-danger' : ''}" 
-                      onclick="${isOn ? `disableAlarm(${id})` : `enableAlarm(${id})`}">
-                ${isOn ? 'Disable' : 'Enable'}
-              </button>
-              <button class="btn btn-small" style="background:#475569; color:white;" onclick="clearAlarm(${id})">Clear</button>
-            </div>
-          `;
-          alarmListDiv.appendChild(alarmElement);
-        }
-      });
+      const alarmsText = parts.length > 1 ? parts[1] : dataString;
+    
+      // Flexible regex matching:
+      // Group 1: Slot ID (\d+)
+      // Group 2: Time (\d{1,2}:\d{2}(?::\d{2})?) -> handles HH:MM or HH:MM:SS
+      // Group 3: Status (ON|OFF)
+      const alarmRegex = /\[(\d+)\]\s*(\d{1,2}:\d{2}(?::\d{2})?)\s*\((ON\vert{}OFF)\)/gi;
+    
+      let match;
+      let foundAlarms = 0;
+    
+      while ((match = alarmRegex.exec(alarmsText)) !== null) {
+        foundAlarms++;
+        const id = match[1];
+        const time = match[2];
+        const isOn = match[3].toUpperCase() === 'ON';
+    
+        const alarmElement = document.createElement('div');
+        alarmElement.className = 'alarm-item';
+        alarmElement.innerHTML = `
+          <div>
+            <span class="alarm-time">${time}</span>
+            <span style="font-size: 0.8rem; color: #94a3b8; margin-left: 8px;">Slot #${id}</span>
+          </div>
+          <div>
+            <button class="btn btn-small ${isOn ? 'btn-danger' : ''}" 
+                    onclick="${isOn ? `disableAlarm(${id})` : `enableAlarm(${id})`}">
+              ${isOn ? 'Disable' : 'Enable'}
+            </button>
+            <button class="btn btn-small" style="background:#475569; color:white;" onclick="clearAlarm(${id})">Clear</button>
+          </div>
+        `;
+        alarmListDiv.appendChild(alarmElement);
+      }
+    
+      if (foundAlarms === 0) {
+        alarmListDiv.innerHTML = `<p style="color: #64748b; text-align: center;">Received response, but couldn't parse alarms format.<br><small>${dataString}</small></p>`;
+      }
     }
 
     function addAlarm() {
