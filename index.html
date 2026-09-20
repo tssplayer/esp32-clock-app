@@ -266,49 +266,68 @@
       const alarmListDiv = document.getElementById('alarmList');
       alarmListDiv.innerHTML = '';
     
-      const parts = dataString.split('|');
-      const alarmsText = parts.length > 1 ? parts[1] : dataString;
+      // 1. Clean up string (remove carriage returns/newlines)
+      const cleanData = dataString.replace(/[\r\n]/g, '').trim();
     
-      // Updated Regex: \d{1,2}:\d{1,2} matches 0:00, 7:30, 21:20, 07:05, etc.
-      const alarmRegex = /\[(\d+)\]\s*(\d{1,2}:\d{1,2}(?::\d{1,2})?)\s*\((ON\vert{}OFF)\)/gi;
-    
-      let match;
-      let foundAlarms = 0;
-    
-      while ((match = alarmRegex.exec(alarmsText)) !== null) {
-        foundAlarms++;
-        const id = match[1];
-        let time = match[2];
-        const isOn = match[3].toUpperCase() === 'ON';
-    
-        // Format time to padded HH:MM format for clean UI (e.g., 0:00 -> 00:00)
-        const timeParts = time.split(':');
-        if (timeParts.length >= 2) {
-          const hours = timeParts[0].padStart(2, '0');
-          const minutes = timeParts[1].padStart(2, '0');
-          time = `${hours}:${minutes}`;
-        }
-    
-        const alarmElement = document.createElement('div');
-        alarmElement.className = 'alarm-item';
-        alarmElement.innerHTML = `
-          <div>
-            <span class="alarm-time">${time}</span>
-            <span style="font-size: 0.8rem; color: #94a3b8; margin-left: 8px;">Slot #${id}</span>
-          </div>
-          <div>
-            <button class="btn btn-small ${isOn ? 'btn-danger' : ''}" 
-                    onclick="${isOn ? `disableAlarm(${id})` : `enableAlarm(${id})`}">
-              ${isOn ? 'Disable' : 'Enable'}
-            </button>
-            <button class="btn btn-small" style="background:#475569; color:white;" onclick="clearAlarm(${id})">Clear</button>
-          </div>
-        `;
-        alarmListDiv.appendChild(alarmElement);
+      // 2. Extract the part after '|'
+      const parts = cleanData.split('|');
+      if (parts.length < 2) {
+        alarmListDiv.innerHTML = `<p style="color: #64748b; text-align: center;">No alarm data section found.<br><small>${cleanData}</small></p>`;
+        return;
       }
     
+      const alarmsSection = parts[1].trim(); // e.g. "[0]21:20(ON) [1]0:00(OFF)..."
+      
+      // 3. Split by spaces to get each item: "[0]21:20(ON)"
+      const alarmTokens = alarmsSection.split(/\s+/);
+      let foundAlarms = 0;
+    
+      alarmTokens.forEach(token => {
+        // Check if token contains the slot format [ID]
+        if (token.includes('[') && token.includes(']')) {
+          try {
+            const id = token.substring(token.indexOf('[') + 1, token.indexOf(']'));
+            const afterId = token.substring(token.indexOf(']') + 1); // e.g. "21:20(ON)" or "0:00(OFF)"
+            
+            const time = afterId.substring(0, afterId.indexOf('('));
+            const statusRaw = afterId.substring(afterId.indexOf('(') + 1, afterId.indexOf(')'));
+            const isOn = statusRaw.toUpperCase() === 'ON';
+    
+            // Format time nicely (e.g. 0:00 -> 00:00)
+            let formattedTime = time;
+            const timeParts = time.split(':');
+            if (timeParts.length >= 2) {
+              const hours = timeParts[0].padStart(2, '0');
+              const minutes = timeParts[1].padStart(2, '0');
+              formattedTime = `${hours}:${minutes}`;
+            }
+    
+            foundAlarms++;
+    
+            const alarmElement = document.createElement('div');
+            alarmElement.className = 'alarm-item';
+            alarmElement.innerHTML = `
+              <div>
+                <span class="alarm-time">${formattedTime}</span>
+                <span style="font-size: 0.8rem; color: #94a3b8; margin-left: 8px;">Slot #${id}</span>
+              </div>
+              <div>
+                <button class="btn btn-small ${isOn ? 'btn-danger' : ''}" 
+                        onclick="${isOn ? `disableAlarm(${id})` : `enableAlarm(${id})`}">
+                  ${isOn ? 'Disable' : 'Enable'}
+                </button>
+                <button class="btn btn-small" style="background:#475569; color:white;" onclick="clearAlarm(${id})">Clear</button>
+              </div>
+            `;
+            alarmListDiv.appendChild(alarmElement);
+          } catch (err) {
+            console.error("Token parse error:", token, err);
+          }
+        }
+      });
+    
       if (foundAlarms === 0) {
-        alarmListDiv.innerHTML = `<p style="color: #64748b; text-align: center;">Received response, but couldn't parse alarms format.<br><small>${dataString}</small></p>`;
+        alarmListDiv.innerHTML = `<p style="color: #64748b; text-align: center;">Received response, but couldn't parse alarms format.<br><small>${cleanData}</small></p>`;
       }
     }
 
