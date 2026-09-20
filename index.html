@@ -37,6 +37,12 @@
       color: var(--accent-color);
     }
 
+    h3 {
+      margin-top: 0;
+      margin-bottom: 12px;
+      font-size: 1.1rem;
+    }
+
     .card {
       background: var(--card-bg);
       border-radius: 12px;
@@ -62,38 +68,122 @@
       opacity: 0.8;
     }
 
-    .btn-danger {
-      background: var(--danger-color);
-      color: white;
-    }
-
     .btn-small {
       width: auto;
       padding: 6px 12px;
       font-size: 0.85rem;
     }
 
+    /* Alarm Item Layout */
     .alarm-item {
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      padding: 12px 0;
-      border-bottom: 1px solid #334155;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      margin-bottom: 10px;
     }
 
     .alarm-item:last-child {
-      border-bottom: none;
+      margin-bottom: 0;
     }
 
-    .alarm-time {
+    /* Clickable Time Button */
+    .time-btn {
+      background: none;
+      border: 1px dashed var(--accent-color);
+      color: var(--accent-color);
       font-size: 1.3rem;
       font-weight: bold;
+      padding: 4px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .time-btn:hover {
+      background: rgba(56, 189, 248, 0.15);
+    }
+
+    /* Right Controls (Toggle + Clear) */
+    .alarm-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    /* Toggle Switch */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 46px;
+      height: 24px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #475569;
+      transition: .3s;
+      border-radius: 24px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider {
+      background-color: var(--success-color);
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(22px);
+    }
+
+    /* Compact 'X' Clear Button */
+    .btn-clear-x {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--danger-color);
+      border: 1px solid var(--danger-color);
+      border-radius: 50%;
+      width: 26px;
+      height: 26px;
+      font-size: 13px;
+      font-weight: bold;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      padding: 0;
+      transition: all 0.2s;
+    }
+
+    .btn-clear-x:hover {
+      background: var(--danger-color);
+      color: white;
     }
 
     .input-group {
       display: flex;
       gap: 10px;
-      margin-top: 10px;
     }
 
     input[type="time"] {
@@ -131,28 +221,33 @@
   <div class="container">
     <h1>ESP32 Clock Dashboard</h1>
 
-    <!-- Connection Section -->
+    <!-- BLE Connection Card -->
     <div class="card">
       <button id="connectBtn" class="btn" onclick="connectBLE()">Connect to ESP32 Clock</button>
       <div id="status">Status: Disconnected</div>
     </div>
 
-    <!-- Set New Alarm -->
+    <!-- Active Alarms List -->
     <div class="card">
-      <h3>Set New Alarm</h3>
-      <div class="input-group">
-        <input type="time" id="alarmTimeInput" value="07:00">
-        <button class="btn btn-small" onclick="addAlarm()">Add Alarm</button>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <h3 style="margin: 0;">Active Alarms</h3>
+        <button class="btn btn-small" style="background: #334155; color: white;" onclick="getAlarms()">Refresh</button>
       </div>
-    </div>
-
-    <!-- Alarm Slots -->
-    <div class="card">
-      <h3>Alarms (0 - 4)</h3>
-      <button class="btn btn-small" style="margin-bottom: 10px;" onclick="getAlarms()">Refresh List</button>
       <div id="alarmList">
         <p style="color: #64748b; text-align: center;">Connect via BLE to load alarms.</p>
       </div>
+    </div>
+
+    <!-- Add New Alarm Card (Positioned at Bottom) -->
+    <div id="addAlarmCard" class="card">
+      <h3>Set New Alarm</h3>
+      <div class="input-group">
+        <input type="time" id="newAlarmTime" value="07:00">
+        <button id="addAlarmBtn" class="btn btn-small" onclick="addNewAlarm()">Add Alarm</button>
+      </div>
+      <p id="maxAlarmsNotice" style="color: var(--danger-color); font-size: 0.85rem; display: none; margin-top: 8px; text-align: center;">
+        Maximum limit reached (5/5 active alarms).
+      </p>
     </div>
 
     <!-- Debug Log -->
@@ -163,49 +258,47 @@
   </div>
 
   <script>
-    // Nordic UART Service UUIDs matching ESP32 Sketch
     const SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
-    const CHARACTERISTIC_RX = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // Write to ESP32
-    const CHARACTERISTIC_TX = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // Receive from ESP32
+    const CHARACTERISTIC_RX = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
+    const CHARACTERISTIC_TX = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
 
     let bleDevice = null;
     let rxCharacteristic = null;
     let txCharacteristic = null;
     let bleRxBuffer = "";
+    let activeAlarmsCount = 0;
+    const MAX_SLOTS = 5;
 
     async function connectBLE() {
       try {
         log("Requesting Bluetooth Device...");
-        
-        // Using acceptAllDevices with optionalServices avoids strict name filter mismatches
         bleDevice = await navigator.bluetooth.requestDevice({
           acceptAllDevices: true,
-          optionalServices: ["6e400001-b5a3-f393-e0a9-e50e24dcca9e"]
+          optionalServices: [SERVICE_UUID]
         });
-    
+
         bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
-    
+
         log("Connecting to GATT Server...");
         const server = await bleDevice.gatt.connect();
-    
+
         log("Getting Service...");
-        const service = await server.getPrimaryService("6e400001-b5a3-f393-e0a9-e50e24dcca9e");
-    
+        const service = await server.getPrimaryService(SERVICE_UUID);
+
         log("Getting Characteristics...");
-        rxCharacteristic = await service.getCharacteristic("6e400002-b5a3-f393-e0a9-e50e24dcca9e");
-        txCharacteristic = await service.getCharacteristic("6e400003-b5a3-f393-e0a9-e50e24dcca9e");
-    
-        // Start Notifications
+        rxCharacteristic = await service.getCharacteristic(CHARACTERISTIC_RX);
+        txCharacteristic = await service.getCharacteristic(CHARACTERISTIC_TX);
+
         await txCharacteristic.startNotifications();
         txCharacteristic.addEventListener('characteristicvaluechanged', handleNotifications);
-    
+
         document.getElementById('status').innerText = "Status: Connected to " + bleDevice.name;
         document.getElementById('connectBtn').innerText = "Disconnect";
         document.getElementById('connectBtn').onclick = disconnectBLE;
-    
+
         log("Connected successfully!");
         getAlarms();
-    
+
       } catch (error) {
         log("Error: " + error);
       }
@@ -224,39 +317,21 @@
       log("Disconnected from device.");
     }
 
-    async function sendCommand(command) {
-      if (!rxCharacteristic) {
-        alert("Please connect to the clock first!");
-        return;
-      }
-      try {
-        const encoder = new TextEncoder();
-        await rxCharacteristic.writeValue(encoder.encode(command));
-        log("Sent: " + command);
-      } catch (error) {
-        log("Send error: " + error);
-      }
-    }
-
     function handleNotifications(event) {
       const chunk = new TextDecoder().decode(event.target.value);
       log("Received Chunk: " + chunk);
-    
-      // Append incoming chunk to buffer
+
       bleRxBuffer += chunk;
-    
-      // Check if buffer contains a newline '\n' indicating end of message
-      // Or check if it contains 'TIME=' to start parsing
+
       if (bleRxBuffer.includes('\n') || bleRxBuffer.includes('\r')) {
         processCompleteMessage(bleRxBuffer.trim());
-        bleRxBuffer = ""; // Clear buffer for next message
+        bleRxBuffer = "";
       }
     }
 
     function processCompleteMessage(fullDataString) {
-      log("Processing Full Msg: " + fullDataString);
-    
-      // If response contains alarm list info
+      log("Processing: " + fullDataString);
+
       if (fullDataString.includes("TIME=")) {
         parseAndRenderList(fullDataString);
       }
@@ -265,97 +340,134 @@
     function parseAndRenderList(dataString) {
       const alarmListDiv = document.getElementById('alarmList');
       alarmListDiv.innerHTML = '';
-    
-      // 1. Clean up string (remove carriage returns/newlines)
+
       const cleanData = dataString.replace(/[\r\n]/g, '').trim();
-    
-      // 2. Extract the part after '|'
       const parts = cleanData.split('|');
-      if (parts.length < 2) {
-        alarmListDiv.innerHTML = `<p style="color: #64748b; text-align: center;">No alarm data section found.<br><small>${cleanData}</small></p>`;
-        return;
-      }
-    
-      const alarmsSection = parts[1].trim(); // e.g. "[0]21:20(ON) [1]0:00(OFF)..."
-      
-      // 3. Split by spaces to get each item: "[0]21:20(ON)"
+
+      if (parts.length < 2) return;
+
+      const alarmsSection = parts[1].trim();
       const alarmTokens = alarmsSection.split(/\s+/);
-      let foundAlarms = 0;
-    
+
+      let displayedAlarms = 0;
+      activeAlarmsCount = 0;
+
       alarmTokens.forEach(token => {
-        // Check if token contains the slot format [ID]
         if (token.includes('[') && token.includes(']')) {
           try {
-            const id = token.substring(token.indexOf('[') + 1, token.indexOf(']'));
-            const afterId = token.substring(token.indexOf(']') + 1); // e.g. "21:20(ON)" or "0:00(OFF)"
-            
-            const time = afterId.substring(0, afterId.indexOf('('));
+            const id = parseInt(token.substring(token.indexOf('[') + 1, token.indexOf(']')));
+            const afterId = token.substring(token.indexOf(']') + 1);
+
+            const rawTime = afterId.substring(0, afterId.indexOf('('));
             const statusRaw = afterId.substring(afterId.indexOf('(') + 1, afterId.indexOf(')'));
             const isOn = statusRaw.toUpperCase() === 'ON';
-    
-            // Format time nicely (e.g. 0:00 -> 00:00)
-            let formattedTime = time;
-            const timeParts = time.split(':');
+
+            let formattedTime = rawTime;
+            const timeParts = rawTime.split(':');
             if (timeParts.length >= 2) {
-              const hours = timeParts[0].padStart(2, '0');
-              const minutes = timeParts[1].padStart(2, '0');
-              formattedTime = `${hours}:${minutes}`;
+              formattedTime = `${timeParts[0].padStart(2, '0')}:${timeParts[1].padStart(2, '0')}`;
             }
-    
-            foundAlarms++;
-    
-            const alarmElement = document.createElement('div');
-            alarmElement.className = 'alarm-item';
-            alarmElement.innerHTML = `
-              <div>
-                <span class="alarm-time">${formattedTime}</span>
-                <span style="font-size: 0.8rem; color: #94a3b8; margin-left: 8px;">Slot #${id}</span>
-              </div>
-              <div>
-                <button class="btn btn-small ${isOn ? 'btn-danger' : ''}" 
-                        onclick="${isOn ? `disableAlarm(${id})` : `enableAlarm(${id})`}">
-                  ${isOn ? 'Disable' : 'Enable'}
-                </button>
-                <button class="btn btn-small" style="background:#475569; color:white;" onclick="clearAlarm(${id})">Clear</button>
-              </div>
-            `;
-            alarmListDiv.appendChild(alarmElement);
+
+            // Exclude disabled 00:00 alarms from rendering
+            const isSet = !(formattedTime === "00:00" && !isOn);
+
+            if (isSet) {
+              displayedAlarms++;
+              activeAlarmsCount++;
+
+              const alarmElement = document.createElement('div');
+              alarmElement.className = 'alarm-item';
+              alarmElement.innerHTML = `
+                <div>
+                  <button class="time-btn" title="Click to edit time" onclick="editAlarmTime(${id}, '${formattedTime}')">
+                    ${formattedTime}
+                  </button>
+                  <span style="font-size: 0.75rem; color: #64748b; margin-left: 6px;">Slot #${id}</span>
+                </div>
+                <div class="alarm-controls">
+                  <label class="switch">
+                    <input type="checkbox" ${isOn ? 'checked' : ''} onchange="toggleAlarm(${id}, this.checked)">
+                    <span class="slider"></span>
+                  </label>
+                  <button class="btn-clear-x" title="Clear Alarm" onclick="clearAlarm(${id})">✕</button>
+                </div>
+              `;
+              alarmListDiv.appendChild(alarmElement);
+            }
           } catch (err) {
             console.error("Token parse error:", token, err);
           }
         }
       });
-    
-      if (foundAlarms === 0) {
-        alarmListDiv.innerHTML = `<p style="color: #64748b; text-align: center;">Received response, but couldn't parse alarms format.<br><small>${cleanData}</small></p>`;
+
+      if (displayedAlarms === 0) {
+        alarmListDiv.innerHTML = `<p style="color: #64748b; text-align: center;">No active alarms set.</p>`;
+      }
+
+      updateAddButtonState();
+    }
+
+    function updateAddButtonState() {
+      const addBtn = document.getElementById('addAlarmBtn');
+      const maxNotice = document.getElementById('maxAlarmsNotice');
+
+      if (activeAlarmsCount >= MAX_SLOTS) {
+        addBtn.disabled = true;
+        addBtn.style.opacity = "0.5";
+        addBtn.style.cursor = "not-allowed";
+        maxNotice.style.display = "block";
+      } else {
+        addBtn.disabled = false;
+        addBtn.style.opacity = "1";
+        addBtn.style.cursor = "pointer";
+        maxNotice.style.display = "none";
       }
     }
 
-    function addAlarm() {
-      const timeVal = document.getElementById('alarmTimeInput').value;
+    function toggleAlarm(slotId, enable) {
+      const cmd = enable ? `ENABLE:${slotId}` : `DISABLE:${slotId}`;
+      sendBLECommand(cmd);
+    }
+
+    function editAlarmTime(slotId, currentTime) {
+      const newTime = prompt(`Edit time for Slot #${slotId}:`, currentTime);
+      if (newTime && newTime !== currentTime) {
+        if (/^\d{2}:\d{2}$/.test(newTime)) {
+          sendBLECommand(`SET:${slotId},${newTime}`);
+        } else {
+          alert("Invalid time format. Please use HH:MM format (e.g., 07:30).");
+        }
+      }
+    }
+
+    function addNewAlarm() {
+      const timeVal = document.getElementById('newAlarmTime').value;
       if (timeVal) {
-        sendCommand(`ADD:${timeVal}`);
-        setTimeout(getAlarms, 300); // refresh list
+        sendBLECommand(`ADD:${timeVal}`);
       }
     }
 
-    function enableAlarm(id) {
-      sendCommand(`ENABLE:${id}`);
-      setTimeout(getAlarms, 300);
-    }
-
-    function disableAlarm(id) {
-      sendCommand(`DISABLE:${id}`);
-      setTimeout(getAlarms, 300);
-    }
-
-    function clearAlarm(id) {
-      sendCommand(`CLEAR:${id}`);
-      setTimeout(getAlarms, 300);
+    function clearAlarm(slotId) {
+      sendBLECommand(`CLEAR:${slotId}`);
     }
 
     function getAlarms() {
-      sendCommand('LIST');
+      sendBLECommand('LIST');
+    }
+
+    async function sendBLECommand(commandStr) {
+      if (!rxCharacteristic) {
+        alert("Please connect to the clock first!");
+        return;
+      }
+      try {
+        log("Sending: " + commandStr);
+        const encoder = new TextEncoder();
+        await rxCharacteristic.writeValue(encoder.encode(commandStr + "\n"));
+        setTimeout(getAlarms, 300);
+      } catch (error) {
+        log("Send error: " + error);
+      }
     }
 
     function log(message) {
