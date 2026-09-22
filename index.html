@@ -436,39 +436,68 @@
     const DAY_NAMES_SHORT = ["S", "M", "T", "W", "T", "F", "S"];
     const MONTH_NAMES = ["Jan.", "Feb.", "Mar.", "Apr.", "May", "Jun.", "Jul.", "Aug.", "Sep.", "Oct.", "Nov.", "Dec."];
 
+    // Check for previously paired devices on page load
+    window.addEventListener('DOMContentLoaded', async () => {
+      if (navigator.bluetooth && navigator.bluetooth.getDevices) {
+        try {
+          const devices = await navigator.bluetooth.getDevices();
+          if (devices.length > 0) {
+            bleDevice = devices[0];
+            document.getElementById('status').innerText = "Status: Found " + (bleDevice.name || "saved clock");
+            document.getElementById('connectBtn').innerText = "Tap to Connect (" + (bleDevice.name || "Clock") + ")";
+            log("Found saved device: " + (bleDevice.name || "ESP32 Clock"));
+          }
+        } catch (err) {
+          log("Saved device check failed: " + err);
+        }
+      }
+    });
+
     async function connectBLE() {
       try {
+        // 1. Reconnect directly if device was previously paired (no popup)
+        if (bleDevice) {
+          log("Reconnecting to saved device...");
+          await connectToGatt(bleDevice);
+          return;
+        }
+
+        // 2. Initial pairing: Request new device via popup
         log("Requesting Bluetooth Device...");
         bleDevice = await navigator.bluetooth.requestDevice({
           acceptAllDevices: true,
           optionalServices: [SERVICE_UUID]
         });
 
-        bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
-
-        log("Connecting to GATT Server...");
-        const server = await bleDevice.gatt.connect();
-
-        log("Getting Service...");
-        const service = await server.getPrimaryService(SERVICE_UUID);
-
-        log("Getting Characteristics...");
-        rxCharacteristic = await service.getCharacteristic(CHARACTERISTIC_RX);
-        txCharacteristic = await service.getCharacteristic(CHARACTERISTIC_TX);
-
-        await txCharacteristic.startNotifications();
-        txCharacteristic.addEventListener('characteristicvaluechanged', handleNotifications);
-
-        document.getElementById('status').innerText = "Status: Connected to " + bleDevice.name;
-        document.getElementById('connectBtn').innerText = "Disconnect";
-        document.getElementById('connectBtn').onclick = disconnectBLE;
-
-        log("Connected successfully!");
-        getAlarms();
+        await connectToGatt(bleDevice);
 
       } catch (error) {
-        log("Error: " + error);
+        log("Connection Error: " + error);
       }
+    }
+
+    async function connectToGatt(device) {
+      device.addEventListener('gattserverdisconnected', onDisconnected);
+
+      log("Connecting to GATT Server...");
+      const server = await device.gatt.connect();
+
+      log("Getting Service...");
+      const service = await server.getPrimaryService(SERVICE_UUID);
+
+      log("Getting Characteristics...");
+      rxCharacteristic = await service.getCharacteristic(CHARACTERISTIC_RX);
+      txCharacteristic = await service.getCharacteristic(CHARACTERISTIC_TX);
+
+      await txCharacteristic.startNotifications();
+      txCharacteristic.addEventListener('characteristicvaluechanged', handleNotifications);
+
+      document.getElementById('status').innerText = "Status: Connected to " + (device.name || "ESP32 Clock");
+      document.getElementById('connectBtn').innerText = "Disconnect";
+      document.getElementById('connectBtn').onclick = disconnectBLE;
+
+      log("Connected successfully!");
+      getAlarms();
     }
 
     function disconnectBLE() {
@@ -479,7 +508,7 @@
 
     function onDisconnected() {
       document.getElementById('status').innerText = "Status: Disconnected";
-      document.getElementById('connectBtn').innerText = "Connect to ESP32 Clock";
+      document.getElementById('connectBtn').innerText = bleDevice ? "Tap to Connect (" + (bleDevice.name || "Clock") + ")" : "Connect to ESP32 Clock";
       document.getElementById('connectBtn').onclick = connectBLE;
       document.getElementById('addAlarmPlusBtn').style.display = 'none';
       log("Disconnected from device.");
