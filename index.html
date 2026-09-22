@@ -77,8 +77,8 @@
     /* Alarm Item Layout */
     .alarm-item {
       display: flex;
-      align-items: center;
-      justify-content: space-between;
+      flex-direction: column;
+      gap: 8px;
       padding: 12px 16px;
       background: #0f172a;
       border: 1px solid #334155;
@@ -86,8 +86,10 @@
       margin-bottom: 10px;
     }
 
-    .alarm-item:last-child {
-      margin-bottom: 0;
+    .alarm-main-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
     }
 
     /* Clickable Time Button */
@@ -107,7 +109,48 @@
       background: rgba(56, 189, 248, 0.15);
     }
 
-    /* Right Controls (Toggle + Clear) */
+    .badge {
+      font-size: 0.7rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: bold;
+      text-transform: uppercase;
+      margin-left: 6px;
+    }
+
+    .badge-repeat {
+      background: rgba(34, 197, 94, 0.2);
+      color: #4ade80;
+      border: 1px solid #22c55e;
+    }
+
+    .badge-once {
+      background: rgba(234, 179, 8, 0.2);
+      color: #fde047;
+      border: 1px solid #eab308;
+    }
+
+    .days-summary {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      display: flex;
+      gap: 4px;
+    }
+
+    .day-pill {
+      padding: 2px 5px;
+      border-radius: 3px;
+      background: #1e293b;
+      color: #475569;
+    }
+
+    .day-pill.active {
+      background: #38bdf8;
+      color: #000;
+      font-weight: bold;
+    }
+
+    /* Controls (Toggle + Clear) */
     .alarm-controls {
       display: flex;
       align-items: center;
@@ -157,7 +200,7 @@
       transform: translateX(22px);
     }
 
-    /* Compact 'X' Clear Button */
+    /* 'X' Clear Button */
     .btn-clear-x {
       background: rgba(239, 68, 68, 0.15);
       color: var(--danger-color);
@@ -167,7 +210,6 @@
       height: 26px;
       font-size: 13px;
       font-weight: bold;
-      line-height: 1;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -204,7 +246,7 @@
       background: rgba(56, 189, 248, 0.2);
     }
 
-    /* Modal Popup Styling */
+    /* Modal Styling */
     .modal-overlay {
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
@@ -220,7 +262,7 @@
       background: var(--card-bg);
       border-radius: 12px;
       padding: 20px;
-      max-width: 320px;
+      max-width: 360px;
       width: 100%;
       box-shadow: 0 10px 25px rgba(0,0,0,0.5);
       border: 1px solid #334155;
@@ -237,6 +279,35 @@
       box-sizing: border-box;
       margin-bottom: 16px;
       text-align: center;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .day-selector {
+      display: flex;
+      justify-content: space-between;
+      gap: 4px;
+      margin-top: 8px;
+    }
+
+    .day-btn {
+      background: #0f172a;
+      color: #64748b;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      padding: 8px 0;
+      width: 100%;
+      font-size: 0.8rem;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .day-btn.selected {
+      background: var(--accent-color);
+      color: #000;
+      border-color: var(--accent-color);
     }
 
     .modal-actions {
@@ -286,7 +357,6 @@
         <p style="color: #64748b; text-align: center;">Connect via BLE to load alarms.</p>
       </div>
 
-      <!-- Add Alarm '+' Button (Shown if available slot exists) -->
       <button id="addAlarmPlusBtn" class="btn-add-plus" onclick="openAddModal()" style="display: none;">
         <span>+</span> Add Alarm
       </button>
@@ -299,14 +369,38 @@
     </div>
   </div>
 
-  <!-- Add Alarm Modal Popup -->
+  <!-- Add/Edit Alarm Modal Popup -->
   <div id="addModal" class="modal-overlay">
     <div class="modal-card">
-      <h3 style="text-align: center; margin-bottom: 16px;">Set New Alarm Time</h3>
+      <h3 id="modalTitle" style="text-align: center; margin-bottom: 16px;">Set New Alarm</h3>
+      
       <input type="time" id="newAlarmTime" value="07:00">
+
+      <div class="form-group" style="display: flex; justify-content: space-between; align-items: center;">
+        <label for="repeatToggle" style="font-size: 0.95rem; font-weight: bold;">Repeat Alarm</label>
+        <label class="switch">
+          <input type="checkbox" id="repeatToggle" onchange="toggleRepeatOptions(this.checked)">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <!-- Days of Week Selection (Hidden for One-Time Alarms) -->
+      <div id="daysContainer" class="form-group" style="display: none;">
+        <label style="font-size: 0.85rem; color: #94a3b8;">Repeat Days</label>
+        <div class="day-selector">
+          <button type="button" class="day-btn selected" data-day="0" onclick="toggleDayBtn(this)">S</button>
+          <button type="button" class="day-btn selected" data-day="1" onclick="toggleDayBtn(this)">M</button>
+          <button type="button" class="day-btn selected" data-day="2" onclick="toggleDayBtn(this)">T</button>
+          <button type="button" class="day-btn selected" data-day="3" onclick="toggleDayBtn(this)">W</button>
+          <button type="button" class="day-btn selected" data-day="4" onclick="toggleDayBtn(this)">T</button>
+          <button type="button" class="day-btn selected" data-day="5" onclick="toggleDayBtn(this)">F</button>
+          <button type="button" class="day-btn selected" data-day="6" onclick="toggleDayBtn(this)">S</button>
+        </div>
+      </div>
+
       <div class="modal-actions">
         <button class="btn" style="background: #475569; color: white;" onclick="closeAddModal()">Cancel</button>
-        <button class="btn" onclick="confirmAddAlarm()">Save Alarm</button>
+        <button class="btn" onclick="confirmSaveAlarm()">Save Alarm</button>
       </div>
     </div>
   </div>
@@ -321,7 +415,9 @@
     let txCharacteristic = null;
     let bleRxBuffer = "";
     let activeAlarmsCount = 0;
+    let editingSlotId = -1; // -1 = Adding new alarm
     const MAX_SLOTS = 5;
+    const DAY_NAMES = ["S", "M", "T", "W", "T", "F", "S"];
 
     async function connectBLE() {
       try {
@@ -374,8 +470,6 @@
 
     function handleNotifications(event) {
       const chunk = new TextDecoder().decode(event.target.value);
-      log("Received Chunk: " + chunk);
-
       bleRxBuffer += chunk;
 
       if (bleRxBuffer.includes('\n') || bleRxBuffer.includes('\r')) {
@@ -385,8 +479,6 @@
     }
 
     function processCompleteMessage(fullDataString) {
-      log("Processing: " + fullDataString);
-
       if (fullDataString.includes("TIME=")) {
         parseAndRenderList(fullDataString);
       }
@@ -398,7 +490,6 @@
 
       const cleanData = dataString.replace(/[\r\n]/g, '').trim();
       const parts = cleanData.split('|');
-
       if (parts.length < 2) return;
 
       const alarmsSection = parts[1].trim();
@@ -414,8 +505,11 @@
             const afterId = token.substring(token.indexOf(']') + 1);
 
             const rawTime = afterId.substring(0, afterId.indexOf('('));
-            const statusRaw = afterId.substring(afterId.indexOf('(') + 1, afterId.indexOf(')'));
-            const isOn = statusRaw.toUpperCase() === 'ON';
+            const params = afterId.substring(afterId.indexOf('(') + 1, afterId.indexOf(')')).split(',');
+
+            const isOn = params[0].toUpperCase() === 'ON';
+            const isRepeat = params[1].toUpperCase() === 'R';
+            const dayMask = params[2] || "1111111";
 
             let formattedTime = rawTime;
             const timeParts = rawTime.split(':');
@@ -423,29 +517,40 @@
               formattedTime = `${timeParts[0].padStart(2, '0')}:${timeParts[1].padStart(2, '0')}`;
             }
 
-            // Exclude disabled 00:00 alarms from rendering
             const isSet = !(formattedTime === "00:00" && !isOn);
 
             if (isSet) {
               displayedAlarms++;
               activeAlarmsCount++;
 
+              // Render Day Summary Pills
+              let daysHtml = '';
+              for (let d = 0; d < 7; d++) {
+                const activeClass = (isRepeat && dayMask.charAt(d) === '1') ? 'active' : '';
+                daysHtml += `<span class="day-pill ${activeClass}">${DAY_NAMES[d]}</span>`;
+              }
+
               const alarmElement = document.createElement('div');
               alarmElement.className = 'alarm-item';
               alarmElement.innerHTML = `
-                <div>
-                  <button class="time-btn" title="Click to edit time" onclick="editAlarmTime(${id}, '${formattedTime}')">
-                    ${formattedTime}
-                  </button>
-                  <span style="font-size: 0.75rem; color: #64748b; margin-left: 6px;">Slot #${id}</span>
+                <div class="alarm-main-row">
+                  <div>
+                    <button class="time-btn" title="Click to edit alarm" onclick="openEditModal(${id}, '${formattedTime}', ${isRepeat}, '${dayMask}')">
+                      ${formattedTime}
+                    </button>
+                    <span class="badge ${isRepeat ? 'badge-repeat' : 'badge-once'}">
+                      ${isRepeat ? 'Repeating' : 'One-Time'}
+                    </span>
+                  </div>
+                  <div class="alarm-controls">
+                    <label class="switch">
+                      <input type="checkbox" ${isOn ? 'checked' : ''} onchange="toggleAlarm(${id}, this.checked)">
+                      <span class="slider"></span>
+                    </label>
+                    <button class="btn-clear-x" title="Clear Alarm" onclick="clearAlarm(${id})">✕</button>
+                  </div>
                 </div>
-                <div class="alarm-controls">
-                  <label class="switch">
-                    <input type="checkbox" ${isOn ? 'checked' : ''} onchange="toggleAlarm(${id}, this.checked)">
-                    <span class="slider"></span>
-                  </label>
-                  <button class="btn-clear-x" title="Clear Alarm" onclick="clearAlarm(${id})">✕</button>
-                </div>
+                ${isRepeat ? `<div class="days-summary">${daysHtml}</div>` : ''}
               `;
               alarmListDiv.appendChild(alarmElement);
             }
@@ -464,7 +569,6 @@
 
     function updatePlusButtonVisibility() {
       const plusBtn = document.getElementById('addAlarmPlusBtn');
-      // Show '+' button only if connected and active slot limit not reached
       if (bleDevice && bleDevice.gatt.connected && activeAlarmsCount < MAX_SLOTS) {
         plusBtn.style.display = "flex";
       } else {
@@ -472,7 +576,42 @@
       }
     }
 
+    function toggleRepeatOptions(isRepeating) {
+      document.getElementById('daysContainer').style.display = isRepeating ? 'block' : 'none';
+    }
+
+    function toggleDayBtn(btn) {
+      btn.classList.toggle('selected');
+    }
+
     function openAddModal() {
+      editingSlotId = -1;
+      document.getElementById('modalTitle').innerText = "Set New Alarm";
+      document.getElementById('newAlarmTime').value = "07:00";
+      document.getElementById('repeatToggle').checked = false; // Default One-Time
+      toggleRepeatOptions(false);
+      
+      // Select all days by default for when repeat is toggled on
+      document.querySelectorAll('.day-btn').forEach(btn => btn.classList.add('selected'));
+      document.getElementById('addModal').style.display = 'flex';
+    }
+
+    function openEditModal(slotId, currentTime, isRepeat, dayMask) {
+      editingSlotId = slotId;
+      document.getElementById('modalTitle').innerText = `Edit Alarm #${slotId}`;
+      document.getElementById('newAlarmTime').value = currentTime;
+      document.getElementById('repeatToggle').checked = isRepeat;
+      toggleRepeatOptions(isRepeat);
+
+      // Restore day selections
+      document.querySelectorAll('.day-btn').forEach((btn, index) => {
+        if (dayMask.charAt(index) === '1') {
+          btn.classList.add('selected');
+        } else {
+          btn.classList.remove('selected');
+        }
+      });
+
       document.getElementById('addModal').style.display = 'flex';
     }
 
@@ -480,28 +619,28 @@
       document.getElementById('addModal').style.display = 'none';
     }
 
-    function confirmAddAlarm() {
+    function confirmSaveAlarm() {
       const timeVal = document.getElementById('newAlarmTime').value;
+      const isRepeat = document.getElementById('repeatToggle').checked ? 1 : 0;
+      
+      // Build 7-bit string representation of selected days
+      let daysMask = "";
+      document.querySelectorAll('.day-btn').forEach(btn => {
+        daysMask += btn.classList.contains('selected') ? "1" : "0";
+      });
+
       if (timeVal) {
-        sendBLECommand(`ADD:${timeVal}`);
+        if (editingSlotId === -1) {
+          sendBLECommand(`ADD:${timeVal},${isRepeat},${daysMask}`);
+        } else {
+          sendBLECommand(`SET:${editingSlotId},${timeVal},${isRepeat},${daysMask}`);
+        }
         closeAddModal();
       }
     }
 
     function toggleAlarm(slotId, enable) {
-      const cmd = enable ? `ENABLE:${slotId}` : `DISABLE:${slotId}`;
-      sendBLECommand(cmd);
-    }
-
-    function editAlarmTime(slotId, currentTime) {
-      const newTime = prompt(`Edit time for Slot #${slotId}:`, currentTime);
-      if (newTime && newTime !== currentTime) {
-        if (/^\d{1,2}:\d{2}$/.test(newTime)) {
-          sendBLECommand(`SET:${slotId},${newTime}`);
-        } else {
-          alert("Invalid time format. Please use HH:MM format (e.g., 07:30).");
-        }
-      }
+      sendBLECommand(enable ? `ENABLE:${slotId}` : `DISABLE:${slotId}`);
     }
 
     function clearAlarm(slotId) {
