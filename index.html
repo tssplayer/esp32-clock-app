@@ -78,7 +78,7 @@
     .alarm-item {
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 10px;
       padding: 12px 16px;
       background: #0f172a;
       border: 1px solid #334155;
@@ -109,13 +109,19 @@
       background: rgba(56, 189, 248, 0.15);
     }
 
-    .badge {
+    /* Interactive Mode Toggle Badge */
+    .badge-btn {
       font-size: 0.7rem;
-      padding: 2px 6px;
-      border-radius: 4px;
+      padding: 4px 8px;
+      border-radius: 6px;
       font-weight: bold;
       text-transform: uppercase;
       margin-left: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
     }
 
     .badge-repeat {
@@ -124,30 +130,50 @@
       border: 1px solid #22c55e;
     }
 
+    .badge-repeat:hover {
+      background: rgba(34, 197, 94, 0.4);
+    }
+
     .badge-once {
       background: rgba(234, 179, 8, 0.2);
       color: #fde047;
       border: 1px solid #eab308;
     }
 
+    .badge-once:hover {
+      background: rgba(234, 179, 8, 0.4);
+    }
+
+    /* Clickable Inline Day Pills */
     .days-summary {
-      font-size: 0.75rem;
-      color: #94a3b8;
       display: flex;
+      justify-content: space-between;
       gap: 4px;
     }
 
-    .day-pill {
-      padding: 2px 5px;
-      border-radius: 3px;
+    .day-pill-btn {
+      flex: 1;
+      padding: 4px 0;
+      border-radius: 4px;
       background: #1e293b;
-      color: #475569;
+      color: #64748b;
+      border: 1px solid #334155;
+      font-size: 0.75rem;
+      font-weight: bold;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s ease;
     }
 
-    .day-pill.active {
+    .day-pill-btn:hover {
+      border-color: var(--accent-color);
+      color: var(--text-color);
+    }
+
+    .day-pill-btn.active {
       background: #38bdf8;
       color: #000;
-      font-weight: bold;
+      border-color: #38bdf8;
     }
 
     /* Controls (Toggle + Clear) */
@@ -200,7 +226,7 @@
       transform: translateX(22px);
     }
 
-    /* 'X' Clear Button */
+    /* Clear Button */
     .btn-clear-x {
       background: rgba(239, 68, 68, 0.15);
       color: var(--danger-color);
@@ -415,7 +441,7 @@
     let txCharacteristic = null;
     let bleRxBuffer = "";
     let activeAlarmsCount = 0;
-    let editingSlotId = -1; // -1 = Adding new alarm
+    let editingSlotId = -1;
     const MAX_SLOTS = 5;
     const DAY_NAMES = ["S", "M", "T", "W", "T", "F", "S"];
 
@@ -523,11 +549,16 @@
               displayedAlarms++;
               activeAlarmsCount++;
 
-              // Render Day Summary Pills
+              // Render Interactive Day Summary Pills
               let daysHtml = '';
               for (let d = 0; d < 7; d++) {
-                const activeClass = (isRepeat && dayMask.charAt(d) === '1') ? 'active' : '';
-                daysHtml += `<span class="day-pill ${activeClass}">${DAY_NAMES[d]}</span>`;
+                const isActive = (isRepeat && dayMask.charAt(d) === '1');
+                daysHtml += `
+                  <button class="day-pill-btn ${isActive ? 'active' : ''}" 
+                          title="Toggle ${DAY_NAMES[d]}"
+                          onclick="toggleInlineDay(${id}, '${formattedTime}', ${d}, '${dayMask}', ${isRepeat})">
+                    ${DAY_NAMES[d]}
+                  </button>`;
               }
 
               const alarmElement = document.createElement('div');
@@ -538,9 +569,12 @@
                     <button class="time-btn" title="Click to edit alarm" onclick="openEditModal(${id}, '${formattedTime}', ${isRepeat}, '${dayMask}')">
                       ${formattedTime}
                     </button>
-                    <span class="badge ${isRepeat ? 'badge-repeat' : 'badge-once'}">
-                      ${isRepeat ? 'Repeating' : 'One-Time'}
-                    </span>
+                    <!-- Toggle Repeat/One-Time Mode -->
+                    <button class="badge-btn ${isRepeat ? 'badge-repeat' : 'badge-once'}" 
+                            title="Click to toggle Repeat / One-Time"
+                            onclick="toggleAlarmRepeatMode(${id}, '${formattedTime}', ${!isRepeat}, '${dayMask}')">
+                      ${isRepeat ? '↻ Repeating' : '1x One-Time'}
+                    </button>
                   </div>
                   <div class="alarm-controls">
                     <label class="switch">
@@ -550,7 +584,7 @@
                     <button class="btn-clear-x" title="Clear Alarm" onclick="clearAlarm(${id})">✕</button>
                   </div>
                 </div>
-                ${isRepeat ? `<div class="days-summary">${daysHtml}</div>` : ''}
+                <div class="days-summary">${daysHtml}</div>
               `;
               alarmListDiv.appendChild(alarmElement);
             }
@@ -565,6 +599,32 @@
       }
 
       updatePlusButtonVisibility();
+    }
+
+    /* Inline Day Toggle Function */
+    function toggleInlineDay(slotId, timeStr, dayIndex, currentMask, isRepeat) {
+      let maskArr = currentMask.split('');
+      
+      // Toggle the specific day bit
+      maskArr[dayIndex] = maskArr[dayIndex] === '1' ? '0' : '1';
+      const newMask = maskArr.join('');
+
+      // If at least one day is enabled, ensure Repeat mode is ON (1). Otherwise, switch to One-Time mode (0).
+      const hasAnyDayActive = newMask.includes('1');
+      const newRepeatState = hasAnyDayActive ? 1 : 0;
+
+      sendBLECommand(`SET:${slotId},${timeStr},${newRepeatState},${newMask}`);
+    }
+
+    /* Direct Toggle for Repeat / One-Time Mode */
+    function toggleAlarmRepeatMode(slotId, timeStr, newRepeatState, dayMask) {
+      const repeatVal = newRepeatState ? 1 : 0;
+      // Default to all days enabled if switching to repeat mode with no active days
+      let effectiveMask = dayMask;
+      if (newRepeatState && !dayMask.includes('1')) {
+        effectiveMask = "1111111";
+      }
+      sendBLECommand(`SET:${slotId},${timeStr},${repeatVal},${effectiveMask}`);
     }
 
     function updatePlusButtonVisibility() {
@@ -588,10 +648,9 @@
       editingSlotId = -1;
       document.getElementById('modalTitle').innerText = "Set New Alarm";
       document.getElementById('newAlarmTime').value = "07:00";
-      document.getElementById('repeatToggle').checked = false; // Default One-Time
+      document.getElementById('repeatToggle').checked = false;
       toggleRepeatOptions(false);
       
-      // Select all days by default for when repeat is toggled on
       document.querySelectorAll('.day-btn').forEach(btn => btn.classList.add('selected'));
       document.getElementById('addModal').style.display = 'flex';
     }
@@ -603,7 +662,6 @@
       document.getElementById('repeatToggle').checked = isRepeat;
       toggleRepeatOptions(isRepeat);
 
-      // Restore day selections
       document.querySelectorAll('.day-btn').forEach((btn, index) => {
         if (dayMask.charAt(index) === '1') {
           btn.classList.add('selected');
@@ -623,7 +681,6 @@
       const timeVal = document.getElementById('newAlarmTime').value;
       const isRepeat = document.getElementById('repeatToggle').checked ? 1 : 0;
       
-      // Build 7-bit string representation of selected days
       let daysMask = "";
       document.querySelectorAll('.day-btn').forEach(btn => {
         daysMask += btn.classList.contains('selected') ? "1" : "0";
