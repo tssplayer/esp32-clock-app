@@ -79,7 +79,7 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
-      padding: 12px 16px;
+      padding: 14px 16px;
       background: #0f172a;
       border: 1px solid #334155;
       border-radius: 8px;
@@ -97,7 +97,7 @@
       background: none;
       border: 1px dashed var(--accent-color);
       color: var(--accent-color);
-      font-size: 1.3rem;
+      font-size: 1.4rem;
       font-weight: bold;
       padding: 4px 8px;
       border-radius: 6px;
@@ -109,42 +109,27 @@
       background: rgba(56, 189, 248, 0.15);
     }
 
-    /* Interactive Mode Toggle Badge */
-    .badge-btn {
-      font-size: 0.7rem;
-      padding: 4px 8px;
-      border-radius: 6px;
+    /* Interactive Date Button for One-Time Alarms */
+    .date-btn {
+      background: rgba(234, 179, 8, 0.1);
+      color: #fde047;
+      border: 1px solid #eab308;
+      font-size: 0.8rem;
       font-weight: bold;
-      text-transform: uppercase;
-      margin-left: 6px;
+      padding: 5px 10px;
+      border-radius: 6px;
       cursor: pointer;
       transition: all 0.2s ease;
       display: inline-flex;
       align-items: center;
-      gap: 3px;
+      gap: 4px;
     }
 
-    .badge-repeat {
-      background: rgba(34, 197, 94, 0.2);
-      color: #4ade80;
-      border: 1px solid #22c55e;
+    .date-btn:hover {
+      background: rgba(234, 179, 8, 0.25);
     }
 
-    .badge-repeat:hover {
-      background: rgba(34, 197, 94, 0.4);
-    }
-
-    .badge-once {
-      background: rgba(234, 179, 8, 0.2);
-      color: #fde047;
-      border: 1px solid #eab308;
-    }
-
-    .badge-once:hover {
-      background: rgba(234, 179, 8, 0.4);
-    }
-
-    /* Clickable Inline Day Pills */
+    /* Clickable Day Pills (Monday to Sunday) */
     .days-summary {
       display: flex;
       justify-content: space-between;
@@ -153,7 +138,7 @@
 
     .day-pill-btn {
       flex: 1;
-      padding: 4px 0;
+      padding: 5px 0;
       border-radius: 4px;
       background: #1e293b;
       color: #64748b;
@@ -410,17 +395,18 @@
         </label>
       </div>
 
-      <!-- Days of Week Selection (Hidden for One-Time Alarms) -->
+      <!-- Days of Week Selection (Monday to Sunday) -->
       <div id="daysContainer" class="form-group" style="display: none;">
         <label style="font-size: 0.85rem; color: #94a3b8;">Repeat Days</label>
         <div class="day-selector">
-          <button type="button" class="day-btn selected" data-day="0" onclick="toggleDayBtn(this)">S</button>
+          <!-- Ordered Mon (1) to Sun (0) -->
           <button type="button" class="day-btn selected" data-day="1" onclick="toggleDayBtn(this)">M</button>
           <button type="button" class="day-btn selected" data-day="2" onclick="toggleDayBtn(this)">T</button>
           <button type="button" class="day-btn selected" data-day="3" onclick="toggleDayBtn(this)">W</button>
           <button type="button" class="day-btn selected" data-day="4" onclick="toggleDayBtn(this)">T</button>
           <button type="button" class="day-btn selected" data-day="5" onclick="toggleDayBtn(this)">F</button>
           <button type="button" class="day-btn selected" data-day="6" onclick="toggleDayBtn(this)">S</button>
+          <button type="button" class="day-btn selected" data-day="0" onclick="toggleDayBtn(this)">S</button>
         </div>
       </div>
 
@@ -443,7 +429,12 @@
     let activeAlarmsCount = 0;
     let editingSlotId = -1;
     const MAX_SLOTS = 5;
-    const DAY_NAMES = ["S", "M", "T", "W", "T", "F", "S"];
+
+    // Ordered Monday (1) through Sunday (0)
+    const MONDAY_FIRST_ORDER = [1, 2, 3, 4, 5, 6, 0];
+    const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const DAY_NAMES_SHORT = ["S", "M", "T", "W", "T", "F", "S"];
+    const MONTH_NAMES = ["Jan.", "Feb.", "Mar.", "Apr.", "May", "Jun.", "Jul.", "Aug.", "Sep.", "Oct.", "Nov.", "Dec."];
 
     async function connectBLE() {
       try {
@@ -510,6 +501,26 @@
       }
     }
 
+    // Calculates "wd, dd. mmmm." for next occurrence of a 1-time alarm
+    function calculateOneTimeDateString(alarmTimeStr) {
+      const now = new Date();
+      const [h, m] = alarmTimeStr.split(':').map(Number);
+      
+      const target = new Date();
+      target.setHours(h, m, 0, 0);
+
+      // If alarm time passed today, set for tomorrow
+      if (target <= now) {
+        target.setDate(target.getDate() + 1);
+      }
+
+      const wd = DAY_NAMES[target.getDay()];
+      const dd = String(target.getDate()).padStart(2, '0');
+      const mmmm = MONTH_NAMES[target.getMonth()];
+
+      return `${wd}, ${dd}. ${mmmm}`;
+    }
+
     function parseAndRenderList(dataString) {
       const alarmListDiv = document.getElementById('alarmList');
       alarmListDiv.innerHTML = '';
@@ -549,33 +560,41 @@
               displayedAlarms++;
               activeAlarmsCount++;
 
-              // Render Interactive Day Summary Pills
-              let daysHtml = '';
-              for (let d = 0; d < 7; d++) {
-                const isActive = (isRepeat && dayMask.charAt(d) === '1');
-                daysHtml += `
-                  <button class="day-pill-btn ${isActive ? 'active' : ''}" 
-                          title="Toggle ${DAY_NAMES[d]}"
-                          onclick="toggleInlineDay(${id}, '${formattedTime}', ${d}, '${dayMask}', ${isRepeat})">
-                    ${DAY_NAMES[d]}
-                  </button>`;
+              let rowDetailsHtml = '';
+
+              if (isRepeat) {
+                // Render Monday-First Day Selector
+                let daysHtml = '';
+                MONDAY_FIRST_ORDER.forEach(d => {
+                  const isActive = dayMask.charAt(d) === '1';
+                  daysHtml += `
+                    <button class="day-pill-btn ${isActive ? 'active' : ''}" 
+                            title="Toggle ${DAY_NAMES[d]}"
+                            onclick="toggleInlineDay(${id}, '${formattedTime}', ${d}, '${dayMask}')">
+                      ${DAY_NAMES_SHORT[d]}
+                    </button>`;
+                });
+                rowDetailsHtml = `<div class="days-summary">${daysHtml}</div>`;
+              } else {
+                // Render Interactive Date for One-Time Alarm
+                const dateStr = calculateOneTimeDateString(formattedTime);
+                rowDetailsHtml = `
+                  <div>
+                    <button class="date-btn" 
+                            title="Click to change to repeating alarm" 
+                            onclick="switchToRepeatingMode(${id}, '${formattedTime}')">
+                      📅 ${dateStr}
+                    </button>
+                  </div>`;
               }
 
               const alarmElement = document.createElement('div');
               alarmElement.className = 'alarm-item';
               alarmElement.innerHTML = `
                 <div class="alarm-main-row">
-                  <div>
-                    <button class="time-btn" title="Click to edit alarm" onclick="openEditModal(${id}, '${formattedTime}', ${isRepeat}, '${dayMask}')">
-                      ${formattedTime}
-                    </button>
-                    <!-- Toggle Repeat/One-Time Mode -->
-                    <button class="badge-btn ${isRepeat ? 'badge-repeat' : 'badge-once'}" 
-                            title="Click to toggle Repeat / One-Time"
-                            onclick="toggleAlarmRepeatMode(${id}, '${formattedTime}', ${!isRepeat}, '${dayMask}')">
-                      ${isRepeat ? '↻ Repeating' : '1x One-Time'}
-                    </button>
-                  </div>
+                  <button class="time-btn" title="Click to edit alarm" onclick="openEditModal(${id}, '${formattedTime}', ${isRepeat}, '${dayMask}')">
+                    ${formattedTime}
+                  </button>
                   <div class="alarm-controls">
                     <label class="switch">
                       <input type="checkbox" ${isOn ? 'checked' : ''} onchange="toggleAlarm(${id}, this.checked)">
@@ -584,7 +603,7 @@
                     <button class="btn-clear-x" title="Clear Alarm" onclick="clearAlarm(${id})">✕</button>
                   </div>
                 </div>
-                <div class="days-summary">${daysHtml}</div>
+                ${rowDetailsHtml}
               `;
               alarmListDiv.appendChild(alarmElement);
             }
@@ -601,30 +620,24 @@
       updatePlusButtonVisibility();
     }
 
-    /* Inline Day Toggle Function */
-    function toggleInlineDay(slotId, timeStr, dayIndex, currentMask, isRepeat) {
+    /* Toggle Day Pill Directly on Card */
+    function toggleInlineDay(slotId, timeStr, dayIndex, currentMask) {
       let maskArr = currentMask.split('');
       
-      // Toggle the specific day bit
+      // Toggle day bit
       maskArr[dayIndex] = maskArr[dayIndex] === '1' ? '0' : '1';
       const newMask = maskArr.join('');
 
-      // If at least one day is enabled, ensure Repeat mode is ON (1). Otherwise, switch to One-Time mode (0).
+      // If at least one day is enabled -> Stay Repeat (1). If ALL days off -> Convert to One-Time (0)
       const hasAnyDayActive = newMask.includes('1');
       const newRepeatState = hasAnyDayActive ? 1 : 0;
 
       sendBLECommand(`SET:${slotId},${timeStr},${newRepeatState},${newMask}`);
     }
 
-    /* Direct Toggle for Repeat / One-Time Mode */
-    function toggleAlarmRepeatMode(slotId, timeStr, newRepeatState, dayMask) {
-      const repeatVal = newRepeatState ? 1 : 0;
-      // Default to all days enabled if switching to repeat mode with no active days
-      let effectiveMask = dayMask;
-      if (newRepeatState && !dayMask.includes('1')) {
-        effectiveMask = "1111111";
-      }
-      sendBLECommand(`SET:${slotId},${timeStr},${repeatVal},${effectiveMask}`);
+    /* Convert One-Time Alarm to Repeating by Clicking Date */
+    function switchToRepeatingMode(slotId, timeStr) {
+      sendBLECommand(`SET:${slotId},${timeStr},1,1111111`);
     }
 
     function updatePlusButtonVisibility() {
@@ -662,8 +675,9 @@
       document.getElementById('repeatToggle').checked = isRepeat;
       toggleRepeatOptions(isRepeat);
 
-      document.querySelectorAll('.day-btn').forEach((btn, index) => {
-        if (dayMask.charAt(index) === '1') {
+      document.querySelectorAll('.day-btn').forEach(btn => {
+        const dayIdx = parseInt(btn.getAttribute('data-day'));
+        if (dayMask.charAt(dayIdx) === '1') {
           btn.classList.add('selected');
         } else {
           btn.classList.remove('selected');
@@ -681,10 +695,15 @@
       const timeVal = document.getElementById('newAlarmTime').value;
       const isRepeat = document.getElementById('repeatToggle').checked ? 1 : 0;
       
-      let daysMask = "";
+      let maskArr = ["0","0","0","0","0","0","0"];
       document.querySelectorAll('.day-btn').forEach(btn => {
-        daysMask += btn.classList.contains('selected') ? "1" : "0";
+        const dayIdx = parseInt(btn.getAttribute('data-day'));
+        if (btn.classList.contains('selected')) {
+          maskArr[dayIdx] = "1";
+        }
       });
+
+      const daysMask = maskArr.join('');
 
       if (timeVal) {
         if (editingSlotId === -1) {
