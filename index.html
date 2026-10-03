@@ -380,6 +380,22 @@
     </div>
   </div>
 
+  <!-- Phone Audio Streaming Card -->
+  <div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <h3 style="margin: 0;">Phone Audio to Speaker</h3>
+        <p style="margin: 4px 0 0 0; font-size: 0.8rem; color: #94a3b8;">
+          Stream phone audio directly to clock speakers
+        </p>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="audioToggle" onchange="toggleAudioStream(this.checked)">
+        <span class="slider"></span>
+      </label>
+    </div>
+  </div>
+
   <!-- Add/Edit Alarm Modal Popup -->
   <div id="addModal" class="modal-overlay">
     <div class="modal-card">
@@ -767,6 +783,28 @@
         await rxCharacteristic.writeValue(encoder.encode(commandStr + "\n"));
       } catch (error) {
         log("Send error: " + error);
+      }
+    }
+
+    async function toggleAudioStream(enabled) {
+      // Check if BLE write characteristic is available
+      if (!rxCharacteristic) {
+        alert("Please connect to the ESP32 via BLE first.");
+        document.getElementById("audioToggle").checked = !enabled; // Reset toggle position
+        return;
+      }
+    
+      const command = enabled ? "AUDIO:1" : "AUDIO:0";
+      const encoder = new TextEncoder();
+    
+      try {
+        // Send command to ESP32 over BLE GATT write characteristic
+        await rxCharacteristic.writeValue(encoder.encode(command + "\n"));
+        log("Sent command: " + command);
+      } catch (error) {
+        log("Failed to send audio toggle command: " + error);
+        // Revert toggle state if sending failed
+        document.getElementById("audioToggle").checked = !enabled;
       }
     }
 
